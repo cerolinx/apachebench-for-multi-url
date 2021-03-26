@@ -101,7 +101,7 @@
  * ab - or to due to a change in the distribution it is compiled with
  * (such as an APR change in for example blocking).
  */
-#define AP_AB_BASEREVISION "2.4.1"
+#define AP_AB_BASEREVISION "2.5.0"
 
 /*
  * BUGS:
@@ -277,7 +277,7 @@ struct data {
 #define MAX_CONCURRENCY 20000
 
 #define URL_LENGTH 2048 // URL length
-#define LIST_LINES 20000 // Max URL lines
+#define LIST_LINES 2000000 // Max URL lines
 
 /* --------------------- GLOBALS ---------------------------- */
 
@@ -387,8 +387,8 @@ int mode = 0; // 0:Normal 1:Multi
 int current_req = 0;
 int turncnt = 1;
 int current_con = 0;
-char url_list_name[URL_LENGTH];/* url list name */
-
+char url_list_name[URL_LENGTH/2];/* url list name */
+char url_prefix[URL_LENGTH/2];/* url prefix */
 /* --------------------------------------------------------- */
 
 /* simple little function to write an error string and exit */
@@ -1921,6 +1921,7 @@ static void usage(const char *progname)
     fprintf(stderr, "    -r              Don't exit on socket receive errors.\n");
     fprintf(stderr, "    -h              Display usage information (this message)\n");
     fprintf(stderr, "    -L              Use URL list file name, eg. url.txt\n");
+    fprintf(stderr, "    -Y              URL prefix for URL list file\n");
 #ifdef USE_SSL
     fprintf(stderr, "    -Z ciphersuite  Specify SSL/TLS cipher suite (See openssl ciphers)\n");
     fprintf(stderr, "    -f protocol     Specify SSL/TLS protocol (SSL2, SSL3, TLS1, or ALL)\n");
@@ -2094,7 +2095,7 @@ int main(int argc, const char * const argv[])
 #endif
 
     apr_getopt_init(&opt, cntxt, argc, argv);
-    while ((status = apr_getopt(opt, "n:c:t:b:T:p:u:v:rkVhwix:y:z:C:H:P:A:g:X:de:Sq:L:"
+    while ((status = apr_getopt(opt, "n:c:t:b:T:p:u:v:rkVhwix:y:z:C:H:P:A:g:X:de:Sq:L:Y:"
 #ifdef USE_SSL
             "Z:f:"
 #endif
@@ -2261,6 +2262,13 @@ int main(int argc, const char * const argv[])
                 mode = 1;
 				strcpy(url_list_name, optarg);
 				break;
+            
+            case 'Y':
+                mode = 1;
+				strcpy(url_prefix, optarg);
+                url_prefix[strlen(optarg)] = '/';
+                url_prefix[strlen(optarg)+1] = '\0';
+				break;
 
 #ifdef USE_SSL
             case 'Z':
@@ -2308,9 +2316,10 @@ if ( mode == 0 ) {
     }
 
     for(line = 0; fgets(url_buf, sizeof url_buf, fp); line++){
-    	url_lists[line] = malloc(strlen(url_buf) + 1);
+    	url_lists[line] = malloc(strlen(url_prefix) + strlen(url_buf) + 1);
     	url_buf[strlen(url_buf)-1]='\0';
-    	strcpy(url_lists[line], url_buf);
+    	strcpy(url_lists[line], url_prefix);
+        strcpy(url_lists[line]+strlen(url_prefix), url_buf);
     }
 
     fclose(fp);
@@ -2348,7 +2357,11 @@ if ( mode == 0 ) {
 #ifdef RSAREF
     R_malloc_init();
 #else
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    CRYPTO_malloc_init();
+#else
     OPENSSL_malloc_init();
+#endif
 #endif
     SSL_load_error_strings();
     SSL_library_init();
